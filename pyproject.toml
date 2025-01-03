@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "lesson-12-1"
+version = "0.1.0"
+description = ""
+authors = ["Vadim Burin <burinvad@mail.ru>"]
+readme = "README.md"
+packages = [{include = "lesson_12"}]
+
+[tool.poetry.dependencies]
+python = "^3.13"
+pytest = "^8.3.4"
+requests = "^2.32.3"
+python-dotenv = "^1.0.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
