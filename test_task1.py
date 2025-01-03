@@ -1,5 +1,12 @@
 import pytest
+
+from date_task2 import event_durations
 from task1 import generate_users  # Импортируем из файла с функцией
+import json
+from unittest.mock import patch, Mock
+
+from task5 import get_user_info, get_user_repos, get_github_users
+from task6 import get_currency_rate
 
 @pytest.fixture
 def data():
@@ -49,3 +56,108 @@ def test_generate_users_cities(data):
     users = [next(generate_users(**data)) for _ in range(5)]
     for user in users:
         assert user['city'] in data['cities']
+
+
+@patch('src.github.requests.get')
+def test_get_user_info(mocked_get):
+    mocked_get.return_value.status_code = 200
+    mocked_get.return_value.json.return_value = {'login': 'test_user', 'public_repos': 10}
+    result = get_user_info('test_user')
+    assert result == (True, {'login': 'test_user', 'public_repos': 10})
+
+@patch('src.github.requests.get')
+def test_get_user_info_invalid(mocked_get):
+    mocked_get.return_value.json.return_value = {'message': 'Not Found'}
+    result = get_user_info('non_existent_user')
+    assert result == (False, {})
+
+@patch('src.github.requests.get')
+def test_get_user_repos(mocked_get):
+    mocked_get.return_value.status_code = 200
+    mocked_get.return_value.json.return_value = [{'name': 'repo1'}, {'name': 'repo2'}]
+    result = get_user_repos('test_user')
+    assert result == (True, ['repo1', 'repo2'])
+
+@patch('src.github.requests.get')
+def test_get_user_repos_invalid(mocked_get):
+    mocked_get.return_value.status_code = 404
+    mocked_get.return_value.json.return_value = {'message': 'Not Found'}
+    result = get_user_repos('non_existent_user')
+    assert result == (False, [])
+
+@patch('src.github.get_user_info')
+@patch('src.github.get_user_repos')
+def test_get_github_users(mock_get_user_repos, mock_get_user_info):
+    mock_get_user_info.return_value = (True, {'login': 'user1', 'public_repos': 2})
+    mock_get_user_repos.return_value = (True, ['repo1', 'repo2'])
+    expected_result = [{'login': 'user1', 'public_repos': 2, 'repositories': ['repo1', 'repo2']}]
+    result = get_github_users(['user1'])
+    assert result == json.dumps(expected_result)
+
+@patch('src.github.get_user_info')
+@patch('src.github.get_user_repos')
+def test_get_github_users_negative(mock_get_user_repos, mock_get_user_info):
+    mock_get_user_info.return_value = (False, {})
+    mock_get_user_repos.return_value = (False, [])
+    result = get_github_users(['non_existent_user'])
+    assert result == None
+
+def test_get_currency_rate_success():
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "Valute": {
+            "USD": {
+                "Value": 73.5
+            }
+        }
+    }
+
+    with patch('requests.get', return_value=mock_response):
+        result = get_currency_rate("USD")
+        assert result == {
+            "currency_code": "USD",
+            "rate": 73.5
+        }
+
+
+def test_get_currency_rate_no_currency():
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "Valute": {
+            "EUR": {
+                "Value": 89.5
+            }
+        }
+    }
+
+    with patch('requests.get', return_value=mock_response):
+        with pytest.raises(ValueError, match="No data for currency"):
+            get_currency_rate("USD")
+
+
+def test_get_currency_rate_failed_request():
+    mock_response = Mock()
+    mock_response.status_code = 500
+
+    with patch('requests.get', return_value=mock_response):
+        with pytest.raises(ValueError, match="Failed to get currency rate"):
+            get_currency_rate("USD")
+
+
+from date_task1 import add_week_to_dates
+
+def test_add_week_to_dates():
+    assert add_week_to_dates(["2022.12.31", "2023.1.7"]) == ["January 7, 2023", "January 14, 2023"]
+    assert add_week_to_dates([]) == []
+
+
+def test_event_durations():
+    json_str = ('['
+                '{"name": "Event 1", "start_date": "2022-01-01", "end_date": "2022-01-05"}, '
+                '{"name": "Event 2", "start_date": "2022-02-15", "end_date": "2022-02-18"}, '
+                '{"name": "Event 3", "start_date": "2022-03-10", "end_date": "2022-03-20"}'
+                ']'
+                )
+    assert event_durations(json_str) == [4, 3, 10]
